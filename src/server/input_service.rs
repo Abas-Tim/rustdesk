@@ -31,6 +31,8 @@ use winapi::um::winuser::WHEEL_DELTA;
 
 const INVALID_CURSOR_POS: i32 = i32::MIN;
 const INVALID_DISPLAY_IDX: i32 = -1;
+// Sample cursor position and shape at ~125 Hz so the remote pointer does not trail the video.
+const CURSOR_POLL_INTERVAL_MS: u64 = 8;
 
 #[derive(Default)]
 struct StateCursor {
@@ -329,13 +331,17 @@ impl MouseCursorService {
 
 pub fn new_cursor() -> ServiceTmpl<MouseCursorSub> {
     let svc = MouseCursorService::new(NAME_CURSOR.to_owned(), true);
-    ServiceTmpl::<MouseCursorSub>::repeat::<StateCursor, _, _>(&svc.clone(), 33, run_cursor);
+    ServiceTmpl::<MouseCursorSub>::repeat::<StateCursor, _, _>(
+        &svc.clone(),
+        CURSOR_POLL_INTERVAL_MS,
+        run_cursor,
+    );
     svc.sp
 }
 
 pub fn new_pos() -> GenericService {
     let svc = EmptyExtraFieldService::new(NAME_POS.to_owned(), false);
-    GenericService::repeat::<StatePos, _, _>(&svc.clone(), 33, run_pos);
+    GenericService::repeat::<StatePos, _, _>(&svc.clone(), CURSOR_POLL_INTERVAL_MS, run_pos);
     svc.sp
 }
 
@@ -663,7 +669,7 @@ pub fn try_start_record_cursor_pos() -> Option<thread::JoinHandle<()>> {
 
     RECORD_CURSOR_POS_RUNNING.store(true, Ordering::SeqCst);
     let handle = thread::spawn(|| {
-        let interval = time::Duration::from_millis(33);
+        let interval = time::Duration::from_millis(CURSOR_POLL_INTERVAL_MS);
         loop {
             if !RECORD_CURSOR_POS_RUNNING.load(Ordering::SeqCst) {
                 break;
